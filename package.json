@@ -9,7 +9,7 @@
   "scripts": {
     "run:patching": "yarn build && node build/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
-    "build": "rimraf ./build && tsc",
+    "build": "rimraf ./build && tsc && tsc-alias",
     "check:ts": "tsc --noEmit",
     "lint": "eslint --max-warnings 0 ./src --ext .ts"
   },
@@ -29,6 +29,7 @@
     "nodemon": "^2.0.20",
     "prettier": "^2.8.4",
     "ts-node": "^10.9.1",
+    "tsc-alias": "^1.8.6",
     "typescript": "^4.9.5"
   }
 }
