@@ -1,8 +1,7 @@
 const packages: Array<[string] | [string, string]> = [
-  ['@gnosis.pm/safe-deployments'],
+  ['@safe-global/safe-core-sdk', '@safe-global/safe-deployments'],
+  ['@safe-global/safe-core-sdk-types', '@safe-global/safe-deployments'],
   ['@safe-global/safe-deployments'],
-  ['@safe-global/safe-core-sdk', '@gnosis.pm/safe-deployments'],
-  ['@safe-global/safe-core-sdk-types', '@gnosis.pm/safe-deployments'],
 ]
 
 const fileNames = Object.freeze([
