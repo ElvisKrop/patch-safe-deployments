@@ -1,13 +1,13 @@
 import fsExtra from 'fs-extra'
 
-import { filesToPatch } from '@/constants'
-import { Arguments, PackageJSON } from '@/types'
+import { filesToPatch } from '~/constants'
+import { Arguments, PackageJSON } from '~/types'
 
-import childProcess from 'child_process'
+import { exec } from 'child_process'
 import * as path from 'path'
 import { promisify } from 'util'
 
-const exec = promisify(childProcess.exec)
+const execAsync = promisify(exec)
 
 // =========================================================================
 // ==================== Entry point of the script ==========================
@@ -15,6 +15,8 @@ const exec = promisify(childProcess.exec)
 ;(async () => {
   try {
     console.log(`Starting script...`)
+
+    // Check if patch-arguments.json exists
     const scriptArgumentsFileName = path.join(
       process.cwd(),
       'patch-arguments.json',
@@ -23,8 +25,10 @@ const exec = promisify(childProcess.exec)
       throw new Error('patch-arguments.json not found')
     }
 
+    // Read patch-arguments.json
     const args: Arguments = await fsExtra.readJson(scriptArgumentsFileName)
 
+    // Get target project root path
     const targetProjectRootPath = path.join(
       process.cwd(),
       '..',
@@ -45,7 +49,7 @@ const exec = promisify(childProcess.exec)
 
       const logTitle = 'Installed dependencies'
       console.time(logTitle)
-      const { stdout, stderr } = await exec(command)
+      const { stdout, stderr } = await execAsync(command)
       if (stderr) console.log(stderr)
       console.log(stdout)
       console.timeEnd(logTitle)
@@ -72,7 +76,7 @@ const exec = promisify(childProcess.exec)
 
         const logTitle = 'Installed additional dependencies'
         console.time(logTitle)
-        const { stdout, stderr } = await exec(command)
+        const { stdout, stderr } = await execAsync(command)
         if (stderr) console.log(stderr)
         console.log(stdout)
         console.timeEnd(logTitle)
@@ -83,7 +87,7 @@ const exec = promisify(childProcess.exec)
       }
     }
 
-    /** Modify postinstall script. if needed */ {
+    /** Modify postinstall script, if needed */ {
       const packageJsonValues: PackageJSON = await fsExtra.readJson(
         packageJsonPath,
       )
@@ -175,7 +179,7 @@ const exec = promisify(childProcess.exec)
 
       const logTitle = 'Patching dependencies'
       console.time(logTitle)
-      const patchingResults = await exec(command)
+      const patchingResults = await execAsync(command)
       console.log(patchingResults.stdout)
       if (patchingResults.stderr) {
         console.log(patchingResults.stderr)

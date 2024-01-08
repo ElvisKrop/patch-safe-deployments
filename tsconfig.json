@@ -37,7 +37,7 @@
     "baseUrl": "./",
     /* Specify a set of entries that re-map imports to additional lookup locations. */
      "paths": {
-          "@/*": [
+          "~/*": [
             "./src/*"
           ]
      },
@@ -120,7 +120,7 @@
     "esnext"
   ],
   "ts-node": {
-    "esm": "true",
+    "esm": true,
     "require": ["tsconfig-paths/register"]
   },
   "include": ["**/*.ts"],
