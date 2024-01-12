@@ -20,16 +20,6 @@ export interface PackageJSON extends Record<string, unknown> {
   devDependencies: Record<string, string>
 }
 
-export interface Arguments {
-  targetProjectFolderName: string
-  chainId: string
-  CompatibilityFallbackHandler: string
-  CreateCall: string
-  GnosisSafe: string
-  GnosisSafeL2: string
-  MultiSend: string
-  MultiSendCallOnly: string
-  GnosisSafeProxyFactory: string
-  SignMessageLib: string
-  SimulateTxAccesor: string
+export interface SafeAssetsJSON extends Record<string, unknown> {
+  networkAddresses: Record<string, string>
 }

@@ -1,7 +1,9 @@
 import fsExtra from 'fs-extra'
 
-import { filesToPatch } from '~/constants'
-import { Arguments, PackageJSON } from '~/types'
+import { patchArgumentsFileName } from '~/constants'
+import { PackageJSON, SafeAssetsJSON } from '~/types'
+import { getFilesForPatching, getSafeContracts } from '~/utils'
+import { PatchArgumentsSchema } from '~/validations'
 
 import { exec } from 'child_process'
 import * as path from 'path'
@@ -16,25 +18,21 @@ const execAsync = promisify(exec)
   try {
     console.log(`Starting script...`)
 
-    // Check if patch-arguments.json exists
-    const scriptArgumentsFileName = path.join(
-      process.cwd(),
-      'patch-arguments.json',
-    )
-    if (!(await fsExtra.pathExists(scriptArgumentsFileName))) {
-      throw new Error('patch-arguments.json not found')
+    // Check if file with arguments exists
+    const scriptArgumentsFilePath = path.join(process.cwd(), patchArgumentsFileName)
+
+    if (!(await fsExtra.pathExists(scriptArgumentsFilePath))) {
+      throw new Error(`${patchArgumentsFileName} not found`)
     }
 
-    // Read patch-arguments.json
-    const args: Arguments = await fsExtra.readJson(scriptArgumentsFileName)
+    // Read the arguments from the given file
+    const scriptArgsRawData = await fsExtra.readJson(scriptArgumentsFilePath)
+    const args = await PatchArgumentsSchema.strict().parseAsync(scriptArgsRawData)
 
     // Get target project root path
-    const targetProjectRootPath = path.join(
-      process.cwd(),
-      '..',
-      args.targetProjectFolderName,
-    )
+    const targetProjectRootPath = path.join(process.cwd(), '..', args.targetProjectFolderName)
     const packageJsonPath = path.join(targetProjectRootPath, 'package.json')
+    const packageJsonValues: PackageJSON = await fsExtra.readJson(packageJsonPath)
 
     /** Check if target folder is nearby */ {
       const isTargetFolderNearby = await fsExtra.pathExists(packageJsonPath)
@@ -56,15 +54,10 @@ const execAsync = promisify(exec)
     }
 
     /** Add postinstall and patch-package deps */ {
-      const packageJsonValues: PackageJSON = await fsExtra.readJson(
-        packageJsonPath,
-      )
+      const devDependencies = Object.keys(packageJsonValues.devDependencies)
 
-      const isPostinstallInstalled =
-        packageJsonValues.devDependencies['postinstall-postinstall'] !==
-        undefined
-      const isPatchPackageInstalled =
-        packageJsonValues.devDependencies['patch-package'] !== undefined
+      const isPostinstallInstalled = devDependencies.includes('postinstall-postinstall')
+      const isPatchPackageInstalled = devDependencies.includes('patch-package')
 
       let command = `cd ${targetProjectRootPath} && yarn add -D`
 
@@ -74,7 +67,7 @@ const execAsync = promisify(exec)
       if (!isPostinstallInstalled || !isPatchPackageInstalled) {
         console.log(command)
 
-        const logTitle = 'Installed additional dependencies'
+        const logTitle = 'Installed additional dependencies successfully'
         console.time(logTitle)
         const { stdout, stderr } = await execAsync(command)
         if (stderr) console.log(stderr)
@@ -88,17 +81,12 @@ const execAsync = promisify(exec)
     }
 
     /** Modify postinstall script, if needed */ {
-      const packageJsonValues: PackageJSON = await fsExtra.readJson(
-        packageJsonPath,
-      )
       const postinstallScriptValue = packageJsonValues.scripts.postinstall
 
       if (postinstallScriptValue === undefined) {
         packageJsonValues.scripts.postinstall = 'patch-package'
       } else if (!postinstallScriptValue.startsWith('patch-package')) {
-        packageJsonValues.scripts.postinstall = 'patch-package && '.concat(
-          postinstallScriptValue,
-        )
+        packageJsonValues.scripts.postinstall = 'patch-package && '.concat(postinstallScriptValue)
       }
 
       await fsExtra.writeJson(packageJsonPath, packageJsonValues, {
@@ -110,53 +98,68 @@ const execAsync = promisify(exec)
     const existingPackages = new Set<string>([])
     /** Update required files */ {
       const nodeModulesPath = path.join(targetProjectRootPath, 'node_modules')
+      const { safeContractsVersion, singletonFactoryType } = args
+
+      const filesToPatch = getFilesForPatching(safeContractsVersion)
+      const safeContractsToInsert = getSafeContracts(
+        safeContractsVersion,
+        singletonFactoryType,
+        args.customContracts,
+      )
 
       for (const packageFile of filesToPatch) {
         const filePath = path.join(nodeModulesPath, packageFile)
         const pathExists = await fsExtra.pathExists(filePath)
 
         if (pathExists) {
-          console.log('We are going to patch -', filePath)
-          const content = await fsExtra.readJson(filePath)
+          console.log('We are going to patch - ', filePath)
+          const fileContent: SafeAssetsJSON = await fsExtra.readJson(filePath)
 
           const CHAIN_ID = args.chainId
-          const fileName = filePath.split(path.sep)[
-            filePath.split(path.sep).length - 1
-          ]
+          const fileName = filePath.split(path.sep)[filePath.split(path.sep).length - 1]
 
           switch (fileName) {
             case 'compatibility_fallback_handler.json':
-              content.networkAddresses[CHAIN_ID] =
-                args.CompatibilityFallbackHandler
+              fileContent.networkAddresses[CHAIN_ID] =
+                safeContractsToInsert.CompatibilityFallbackHandler
               break
             case 'create_call.json':
-              content.networkAddresses[CHAIN_ID] =
-                args.CompatibilityFallbackHandler
+              fileContent.networkAddresses[CHAIN_ID] =
+                safeContractsToInsert.CompatibilityFallbackHandler
               break
             case 'gnosis_safe.json':
-              content.networkAddresses[CHAIN_ID] = args.GnosisSafe
+            case 'safe.json':
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.GnosisSafe
               break
             case 'gnosis_safe_l2.json':
-              content.networkAddresses[CHAIN_ID] = args.GnosisSafeL2
+            case 'safe_l2.json':
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.GnosisSafeL2
               break
             case 'multi_send.json':
-              content.networkAddresses[CHAIN_ID] = args.MultiSend
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.MultiSend
               break
             case 'multi_send_call_only.json':
-              content.networkAddresses[CHAIN_ID] = args.MultiSendCallOnly
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.MultiSendCallOnly
               break
             case 'proxy_factory.json':
-              content.networkAddresses[CHAIN_ID] = args.GnosisSafeProxyFactory
+            case 'safe_proxy_factory.json':
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.GnosisSafeProxyFactory
               break
             case 'sign_message_lib.json':
-              content.networkAddresses[CHAIN_ID] = args.SignMessageLib
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.SignMessageLib
               break
             case 'simulate_tx_accessor.json':
-              content.networkAddresses[CHAIN_ID] = args.SimulateTxAccesor
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.SimulateTxAccesor
+              break
+            case 'default_callback_handler.json':
+              if (safeContractsToInsert.DefaultCallbackHandler) {
+                fileContent.networkAddresses[CHAIN_ID] =
+                  safeContractsToInsert.DefaultCallbackHandler
+              }
               break
           }
 
-          await fsExtra.writeJson(filePath, content, {
+          await fsExtra.writeJson(filePath, fileContent, {
             EOL: '\n',
             spaces: packageFile.includes('dist') ? 4 : 2,
           })
@@ -165,7 +168,9 @@ const execAsync = promisify(exec)
             packageFile
               .replace('/node_modules', '')
               .replace(`/src/assets/v1.3.0/${fileName}`, '')
-              .replace(`/dist/assets/v1.3.0/${fileName}`, ''),
+              .replace(`/src/assets/v1.4.1/${fileName}`, '')
+              .replace(`/dist/assets/v1.3.0/${fileName}`, '')
+              .replace(`/dist/assets/v1.4.1/${fileName}`, ''),
           )
         }
       }
@@ -173,8 +178,7 @@ const execAsync = promisify(exec)
 
     /** Perform patching */ {
       const command =
-        `cd ${targetProjectRootPath} && npx patch-package ` +
-        Array.from(existingPackages).join(' ')
+        `cd ${targetProjectRootPath} && npx patch-package ` + Array.from(existingPackages).join(' ')
       console.log(command)
 
       const logTitle = 'Patching dependencies'
