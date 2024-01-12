@@ -124,8 +124,7 @@ const execAsync = promisify(exec)
                 safeContractsToInsert.CompatibilityFallbackHandler
               break
             case 'create_call.json':
-              fileContent.networkAddresses[CHAIN_ID] =
-                safeContractsToInsert.CompatibilityFallbackHandler
+              fileContent.networkAddresses[CHAIN_ID] = safeContractsToInsert.CreateCall
               break
             case 'gnosis_safe.json':
             case 'safe.json':
