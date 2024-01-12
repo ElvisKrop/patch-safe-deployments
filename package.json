@@ -1,6 +1,6 @@
 {
   "name": "patch-safe-deployments",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "build/intex.js",
   "author": "Nikita Zasimuk <nzasimuk@gmail.com>",
   "license": "MIT",
