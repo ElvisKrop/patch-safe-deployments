@@ -3,5 +3,5 @@
   "trailingComma": "all",
   "allowParens": "avoid",
   "semi": false,
-  "printWidth": 80
+  "printWidth": 100
 }
